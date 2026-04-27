@@ -60,6 +60,7 @@ class AnamolyDetection:
     
     def get_prediction(self):
         self.y_pred = self.model.predict(self.X_test)
+        self.confidence_score = self.model.predict_proba(self.X_test)
         
         self.accuracy = accuracy_score(self.y_test, self.y_pred)
         # Use average='weighted' for multiclass classification
@@ -73,6 +74,66 @@ class AnamolyDetection:
 
         return self.y_pred, self.accuracy, self.precision, self.recall
     
-    def get_llm_response(self):
-        
-        
+    def context_package(self, i):
+
+        idx = self.X_test.index[i]
+        sample = self.df.loc[idx]
+        prediction = self.y_pred[i]
+        confidence_score = np.max(self.confidence_score[i]) 
+
+        context = f"""
+        Resource Metrics:
+        resource_id:{sample["resource_id"]}
+        cpu_avg:{sample["cpu_avg"]}%
+        network_pct:{sample["network_pct"]}%
+        internet_facing:{sample["internet_facing"]}
+
+        ML Predictions :
+        -prediction:{prediction}
+        -confidence_score:{confidence_score}
+        -is_anomalous:{sample["is_anomalous"]}
+        """
+        return context
+    def get_response(self, context): 
+
+        prompt = f"""
+        You're a Smart resource analyst and an anomaly detection specialist, 
+        based on the given metrics{context} by the user and based on the predictions 
+        and confidence_score inside the context, you have to give a detailed resoning
+        in strictly this JSON Format:
+        {{
+            "resource_id": "original_id",
+            "is_anomalous": true/false,
+            "anomaly_type": "the_predicted_label",
+            "reason": "a short one line explanation",
+            "suggested_action": "what to do next",
+            "confidence": 0.00,
+            "security_note": "only if relevant"
+        }}
+        """
+        response = self.llm_response.llm_brain(
+            content=prompt
+        )
+
+        # Strip preamble text to keep only the JSON object
+        if "{" in response:
+            response = response[response.find('{'):response.rfind('}')+1]
+        return response
+
+if __name__ == "__main__":
+    detector = AnamolyDetection()
+    detector.load_data()
+    detector.preprocessing()
+    detector.data_split()
+    detector.model_train()
+    detector.get_prediction()
+    
+    print("\n" + "="*50)
+    print("🚀 GENERATING 5 SAMPLE ANALYSES")
+    print("="*50)
+
+    for i in range(5):
+        ctx = detector.context_package(i)
+        result = detector.get_response(ctx)
+        print(f"\n--- [SAMPLE {i+1}] ---")
+        print(result)

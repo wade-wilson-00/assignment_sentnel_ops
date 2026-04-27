@@ -27,49 +27,49 @@ SCENARIOS = [
     {
         "label"               : "normal",
         "n"                   : 250,
-        "cpu_avg_base"        : 35,
-        "cpu_p95_base"        : 55,
-        "memory_avg_base"     : 50,
-        "network_pct_base"    : 45,
+        "cpu_avg_base"        : 45,       # Higher baseline
+        "cpu_p95_base"        : 65,
+        "memory_avg_base"     : 55,
+        "network_pct_base"    : 50,
         "internet_facing_prob": 0.40,
         "identity_prob"       : 0.40,
-        "noise_std"           : 7,
+        "noise_std"           : 15,       # Doubled noise
     },
     {
         # Very low CPU + low network → zombie/idle server, paying for nothing
         "label"               : "over_provisioned",
         "n"                   : 150,
-        "cpu_avg_base"        : 5,
-        "cpu_p95_base"        : 10,
-        "memory_avg_base"     : 38,
-        "network_pct_base"    : 12,
+        "cpu_avg_base"        : 12,       # Moved closer to normal
+        "cpu_p95_base"        : 20,
+        "memory_avg_base"     : 45,
+        "network_pct_base"    : 18,
         "internet_facing_prob": 0.50,
         "identity_prob"       : 0.60,
-        "noise_std"           : 4,
+        "noise_std"           : 12,       # Higher noise
     },
     {
         # CPU hammered, network proportionally high → heavy load / traffic surge
         "label"               : "cpu_saturated",
         "n"                   : 200,
-        "cpu_avg_base"        : 86,
-        "cpu_p95_base"        : 96,
-        "memory_avg_base"     : 58,
-        "network_pct_base"    : 62,
+        "cpu_avg_base"        : 80,       # Lowered anchor
+        "cpu_p95_base"        : 90,
+        "memory_avg_base"     : 65,
+        "network_pct_base"    : 55,
         "internet_facing_prob": 0.55,
         "identity_prob"       : 0.45,
-        "noise_std"           : 5,
+        "noise_std"           : 14,       # Higher noise
     },
     {
         # RAM near exhaustion while CPU is still moderate → memory leak or bloat
         "label"               : "memory_pressure",
         "n"                   : 150,
-        "cpu_avg_base"        : 28,
-        "cpu_p95_base"        : 42,
-        "memory_avg_base"     : 91,
-        "network_pct_base"    : 28,
+        "cpu_avg_base"        : 35,
+        "cpu_p95_base"        : 50,
+        "memory_avg_base"     : 85,       # Lowered anchor
+        "network_pct_base"    : 35,
         "internet_facing_prob": 0.35,
         "identity_prob"       : 0.50,
-        "noise_std"           : 5,
+        "noise_std"           : 14,
     },
     {
         # CPU and network move in OPPOSITE directions:
@@ -84,7 +84,7 @@ SCENARIOS = [
         "network_pct_base"    : None,
         "internet_facing_prob": 0.65,         # more likely exposed (higher risk)
         "identity_prob"       : 0.55,
-        "noise_std"           : 6,
+        "noise_std"           : 15,
     },
 ]
 
@@ -153,8 +153,8 @@ def generate_dataset() -> pd.DataFrame:
             half = n // 2
             for _ in range(half):
                 rows.append(build_row(
-                    cpu_avg_base=82, cpu_p95_base=92,
-                    memory_avg_base=46, network_pct_base=14,
+                    cpu_avg_base=75, cpu_p95_base=85, # Less extreme
+                    memory_avg_base=50, network_pct_base=25,
                     internet_facing_prob=if_prob, identity_prob=id_prob,
                     noise_std=std, label=label, row_id=row_id
                 ))
@@ -163,8 +163,8 @@ def generate_dataset() -> pd.DataFrame:
             # Sub-pattern B: low CPU, high network (data exfiltration signal)
             for _ in range(n - half):
                 rows.append(build_row(
-                    cpu_avg_base=7, cpu_p95_base=12,
-                    memory_avg_base=32, network_pct_base=82,
+                    cpu_avg_base=15, cpu_p95_base=25,
+                    memory_avg_base=40, network_pct_base=75,
                     internet_facing_prob=if_prob, identity_prob=id_prob,
                     noise_std=std, label=label, row_id=row_id
                 ))
@@ -185,6 +185,17 @@ def generate_dataset() -> pd.DataFrame:
                 row_id += 1
 
     df = pd.DataFrame(rows)
+
+    # --- NEW: Introduce Label Corruption (Realistic Errors) ---
+    # Randomly flip 5% of labels to a different class
+    corrupt_idx = df.sample(frac=0.05).index
+    possible_labels = [s["label"] for s in SCENARIOS]
+    for idx in corrupt_idx:
+        current_label = df.loc[idx, "anomaly_type"]
+        new_label = np.random.choice([l for l in possible_labels if l != current_label])
+        df.loc[idx, "anomaly_type"] = new_label
+        df.loc[idx, "is_anomalous"] = (new_label != "normal")
+
     # shuffle so the CSV isn't grouped by scenario
     df = df.sample(frac=1, random_state=42).reset_index(drop=True)
     return df

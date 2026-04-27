@@ -63,7 +63,6 @@ class AnamolyDetection:
         self.confidence_score = self.model.predict_proba(self.X_test)
         
         self.accuracy = accuracy_score(self.y_test, self.y_pred)
-        # Use average='weighted' for multiclass classification
         self.precision = precision_score(self.y_test, self.y_pred, average='weighted')
         self.recall = recall_score(self.y_test, self.y_pred, average='weighted')
 
@@ -115,7 +114,6 @@ class AnamolyDetection:
             content=prompt
         )
 
-        # Strip preamble text to keep only the JSON object
         if "{" in response:
             response = response[response.find('{'):response.rfind('}')+1]
         return response
@@ -128,11 +126,9 @@ if __name__ == "__main__":
     detector.model_train()
     detector.get_prediction()
     
-    print("\n" + "="*50)
-    print("🚀 GENERATING 5 SAMPLE ANALYSES")
-    print("="*50)
+    print("GENERATING 5 SAMPLE ANALYSES")
 
-    for i in range(5):
+    for i in range(5, 10):
         ctx = detector.context_package(i)
         result = detector.get_response(ctx)
         print(f"\n--- [SAMPLE {i+1}] ---")
